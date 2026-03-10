@@ -22,3 +22,8 @@ dev/
 # Results files (per-run TSVs live under results/)
 results.tsv
 *.png
+
+# Director binaries, logs & secrets
+director/logs/
+*/director
+.env
