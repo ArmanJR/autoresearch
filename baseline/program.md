@@ -65,26 +65,31 @@ grep "^val_bpb:" run.log
 
 When an experiment is done, log it to `results.tsv` (tab-separated, NOT comma-separated — commas break in descriptions).
 
-The TSV has a header row and 5 columns:
+The results file lives at a path provided by the `RESULTS_TSV` environment variable. If not set, default to `results.tsv` in the current directory.
+
+The TSV has a header row and 8 columns:
 
 ```
-commit	val_bpb	memory_gb	status	description
+iter	commit	val_bpb	best_val_bpb	memory_gb	status	description	timestamp
 ```
 
-1. git commit hash (short, 7 chars)
-2. val_bpb achieved (e.g. 1.234567) — use 0.000000 for crashes
-3. peak memory in GB, round to .1f (e.g. 12.3 — divide peak_vram_mb by 1024) — use 0.0 for crashes
-4. status: `keep`, `discard`, or `crash`
-5. short text description of what this experiment tried
+1. iteration number, starting at 1 (sequential counter, incremented for every experiment including crashes)
+2. git commit hash (short, 7 chars)
+3. val_bpb achieved (e.g. 1.234567) — use 0.000000 for crashes
+4. best_val_bpb so far — the running minimum of val_bpb across all kept experiments up to this point (carry forward the previous best on discard/crash)
+5. peak memory in GB, round to .1f (e.g. 12.3 — divide peak_vram_mb by 1024) — use 0.0 for crashes
+6. status: `keep`, `discard`, or `crash`
+7. short text description of what this experiment tried
+8. timestamp in ISO 8601 format (e.g. 2026-03-09T22:15:03)
 
 Example:
 
 ```
-commit	val_bpb	memory_gb	status	description
-a1b2c3d	0.997900	44.0	keep	baseline
-b2c3d4e	0.993200	44.2	keep	increase LR to 0.04
-c3d4e5f	1.005000	44.0	discard	switch to GeLU activation
-d4e5f6g	0.000000	0.0	crash	double model width (OOM)
+iter	commit	val_bpb	best_val_bpb	memory_gb	status	description	timestamp
+1	a1b2c3d	0.997900	0.997900	44.0	keep	baseline	2026-03-09T22:15:03
+2	b2c3d4e	0.993200	0.993200	44.2	keep	increase LR to 0.04	2026-03-09T22:20:45
+3	c3d4e5f	1.005000	0.993200	44.0	discard	switch to GeLU activation	2026-03-09T22:26:12
+4	d4e5f6g	0.000000	0.993200	0.0	crash	double model width (OOM)	2026-03-09T22:31:58
 ```
 
 ## The experiment loop

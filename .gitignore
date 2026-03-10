@@ -19,5 +19,6 @@ AGENTS.md
 # Experimental code/artifacts
 dev/
 
-# Results file
+# Results files (per-run TSVs live under results/)
 results.tsv
+*.png
