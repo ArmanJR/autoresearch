@@ -35,6 +35,10 @@ mad-scientist/            # experiment with director-driven exploration
   train.py, prepare.py, program.md, director, .env
   .claude/                # agent confinement (hooks + settings)
 
+mad-scientist-3-11/       # second director run (full paper summaries, lower temp)
+  train.py, prepare.py, program.md, director, .env
+  .claude/                # agent confinement (hooks + settings)
+
 director/                 # director source code
   main.go
   configs/*.json          # per-experiment config (prompts, arxiv terms, model, temp)
@@ -53,15 +57,43 @@ Makefile
 | Name | Director | Description |
 |------|----------|-------------|
 | `baseline` | None | Vanilla autoresearch. The agent decides what to try next on its own. Control group. |
-| `mad-scientist` | DeepSeek Reasoner (temp 1.2) | Summarizes current code, reads experiment history, fetches a random ML paper from arxiv, then generates a bold directive framed as a suggestion. Combines code awareness + historical context + external novelty. |
+| `mad-scientist` | DeepSeek Reasoner (temp 1.2) | Summarizes current code, reads experiment history, fetches a random ML paper abstract from arxiv, then generates a bold directive framed as a suggestion. Combines code awareness + historical context + external novelty. |
+| `mad-scientist-3-11` | DeepSeek Reasoner (temp 1.0) | Iteration on mad-scientist: feeds full paper summaries (not just abstracts) via DeepSeek-summarized ar5iv fetches, narrower arxiv categories (cs.LG + cs.CL only), stricter system prompt with scale-awareness rules and history-dedup guidance. |
 
-#### Mad-Scientist vs Original Baseline (Karpathy's H100)
+#### Director config differences: mad-scientist vs mad-scientist-3-11
+
+| | `mad-scientist` | `mad-scientist-3-11` |
+|---|---|---|
+| Temperature | 1.2 | 1.0 |
+| Paper input | Abstract only (`{{paper_abstract}}`) | Full summary (`{{paper_abstract}}` + `{{paper_summary}}`) |
+| arxiv categories | 5 (cs.LG, cs.CL, cs.AI, cs.CV, stat.ML) | 2 (cs.LG, cs.CL) |
+| System prompt | Generic "small GPT", loose rules | Specifies ~10M params, stricter rules (read history, one thing at a time, scale-aware) |
+| Max response | Not specified | 3 paragraphs |
+
+#### Mad-Scientist Runs vs Original Baseline (Karpathy's H100)
 
 ![Relative improvement trajectory](h2h_relative_improvement.png)
+
+| | original-baseline | mad-scientist | mad-scientist-3-11 |
+|---|---|---|---|
+| Experiments | 126 | 96 | 96 |
+| Keeps (rate) | 23 (18.3%) | 22 (22.9%) | 16 (16.7%) |
+| Total improvement | 2.83% | 3.94% | 2.79% |
+| Improvement/experiment | 0.0224% | 0.0411% | 0.0291% |
+| Longest stall | 25 | 15 | 31 |
+| Best BPB | 0.969686 | 1.286357 | 1.302036 |
+
+**mad-scientist** remains the strongest run — highest keep rate, most total improvement, and shortest stalls. **mad-scientist-3-11** underperformed despite having richer paper context: lower keep rate (16.7% vs 22.9%), less total improvement (2.79% vs 3.94%), and a 31-iteration stall at the end where it couldn't break past 1.302. The tighter prompt and lower temperature may have over-constrained the director, producing more conservative suggestions that failed to escape local minima.
+
+##### Key moments from mad-scientist (run 1)
 
 The biggest single jump came at **iteration 44** — the agent removed the logit softcap (tanh clamping at ±15), dropping val_bpb from 1.309 to 1.299 in one step. Notably, the director had suggested something entirely different (linear attention to break an 8-iteration stall), but the researcher agent ignored it and made a simpler, more effective change on its own. The director's value here was indirect: by flagging the stall and pushing for radical action, it prompted the agent to re-examine the code and spot the softcap as dead weight — something it had overlooked for 43 iterations.
 
 The second jump came at **iteration 67** — this time the agent followed the director's advice almost exactly. After another 8-iteration stall (best stuck at 1.294), the director suggested reducing attention heads from 6 to 4 while increasing HEAD_DIM from 64 to 96 to preserve the embedding dimension. No paper was fetched; this was purely the director's own reasoning. The agent implemented it verbatim (val_bpb 1.294 → 1.290), then kept pushing the same idea through iterations 68–69 (HEAD_DIM=128 → 192), reaching 1.287 before single-head attention went too far. Both jumps were triggered by the same stall-detection mechanism ("8 consecutive failures → go radical"), but with opposite dynamics: iteration 44 succeeded by ignoring the director, iteration 67 by following it.
+
+##### Key moments from mad-scientist-3-11 (run 2)
+
+The biggest breakthrough came at **iteration 43** — replacing ReLU² with SwiGLU activation (iso-parameter), jumping from 1.316 to 1.306. This was followed by a productive stretch (iterations 47–65) of incremental optimizer tuning that pushed BPB down to 1.302. After iteration 65, the run hit a wall: 31 consecutive experiments without improvement, exploring attention tweaks, initialization changes, and architectural modifications — none broke through.
 
 ### Commands
 
